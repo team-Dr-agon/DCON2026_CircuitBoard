@@ -2,10 +2,10 @@
 #define GET_HPP
 
 #include <Arduino.h>
-#include "MAX30105.h"
-#include "Adafruit_BNO08x_RVC.h"
-#include "heartRate.h"
-#include "spo2_algorithm.h"
+#include <MAX30105.h>
+#include <Adafruit_BNO08x_RVC.h>
+#include <heartRate.h>
+#include <spo2_algorithm.h>
 
 
 // センサーデータ構造体

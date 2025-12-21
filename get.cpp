@@ -13,6 +13,15 @@ bool initMAX30105(MAX30105 &sensor) {
         delay(2000);
     }
     
+    // Part IDを確認して実際にセンサーが存在するか検証
+    byte partID = sensor.readPartID();
+    Serial.print("MAX30105 Part ID: 0x");
+    Serial.println(partID, HEX);
+    
+    if (partID != 0x15) {  // MAX30105のPart IDは0x15
+        Serial.println("警告: MAX30105が検出されていない可能性があります");
+    }
+    
     // センサー設定
     byte ledBrightness = 60;   // LED輝度 (0=Off to 255=50mA)
     byte sampleAverage = 4;    // サンプル平均化

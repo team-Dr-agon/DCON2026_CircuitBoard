@@ -61,4 +61,28 @@ void loop() {
     // 心拍数センサーバッファを常に更新（平均値計算のため）
     updateHeartRateBuffer(max30105);
     handleHTTP();
+    
+    // センサー診断（1秒ごと）
+    if (millis() - lastSensorUpdate >= SENSOR_UPDATE_INTERVAL) {
+        lastSensorUpdate = millis();
+        
+        // MAX30105の生データ確認
+        Serial.print("[診断] IR値: ");
+        Serial.print(max30105.getIR());
+        Serial.print(", RED値: ");
+        Serial.println(max30105.getRed());
+        
+        // BNO08xデータ確認
+        IMUData imuData;
+        if (getIMUData(bno08x, imuData)) {
+            Serial.print("[診断] IMU - Pitch: ");
+            Serial.print(imuData.pitch, 2);
+            Serial.print("°, Yaw: ");
+            Serial.print(imuData.yaw, 2);
+            Serial.println("°");
+        } else {
+            Serial.println("[診断] IMU - データ読取失敗");
+        }
+        Serial.println();
+    }
 }

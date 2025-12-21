@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32-C3 Web API 仕様書</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        header h1 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        header p {
+            text-align: center;
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .content {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        h2 {
+            color: #667eea;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 0.5rem;
+            margin: 2rem 0 1rem 0;
+        }
+
+        h3 {
+            color: #764ba2;
+            margin: 1.5rem 0 1rem 0;
+        }
+
+        h4 {
+            color: #555;
+            margin: 1rem 0 0.5rem 0;
+        }
+
+        .info-box {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+        }
+
+        .wifi-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .wifi-info .info-item {
+            background: #e8eaf6;
+            padding: 1rem;
+            border-radius: 4px;
+        }
+
+        .wifi-info .info-item strong {
+            color: #667eea;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        .endpoint {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .endpoint-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .endpoint-title {
+            font-size: 1.3rem;
+            color: #333;
+            font-weight: bold;
+        }
+
+        .method {
+            background: #4caf50;
+            color: white;
+            padding: 0.3rem 0.8rem;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .endpoint-path {
+            background: #f5f5f5;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: #d32f2f;
+            font-weight: bold;
+        }
+
+        .param-list {
+            margin: 1rem 0;
+        }
+
+        .param-list li {
+            margin: 0.5rem 0 0.5rem 2rem;
+        }
+
+        code {
+            background: #f5f5f5;
+            padding: 0.2rem 0.5rem;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #d32f2f;
+        }
+
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 1rem;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+
+        pre code {
+            background: transparent;
+            color: #f8f8f2;
+            padding: 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        table th,
+        table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        table th {
+            background: #667eea;
+            color: white;
+            font-weight: bold;
+        }
+
+        table tr:hover {
+            background: #f5f5f5;
+        }
+
+        .field-desc {
+            background: #fafafa;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+        }
+
+        .field-desc ul {
+            list-style: none;
+        }
+
+        .field-desc li {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .field-desc li:last-child {
+            border-bottom: none;
+        }
+
+        .field-desc li strong {
+            color: #667eea;
+            font-family: 'Courier New', monospace;
+        }
+
+        .example-section {
+            margin: 1rem 0;
+        }
+
+        .note-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+        }
+
+        .note-box h4 {
+            color: #856404;
+            margin-top: 0;
+        }
+
+        .note-box ol {
+            margin-left: 1.5rem;
+            margin-top: 0.5rem;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+            background: white;
+            border-radius: 8px;
+            margin-top: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 1.8rem;
+            }
+
+            .content {
+                padding: 1rem;
+            }
+
+            .endpoint-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>ESP32-C3 Web API 仕様書</h1>
+            <p>RESTful APIでセンサーデータ取得とPWM制御</p>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="content">
+            <h2>概要</h2>
+            <p>ESP32-C3をアクセスポイントとして起動し、RESTful Web APIを提供します。<br>
+            センサーデータの取得やPWM制御が可能です。</p>
+
+            <h2>接続情報</h2>
+            <div class="wifi-info">
+                <div class="info-item">
+                    <strong>SSID</strong>
+                    <code>ESP32-C3_AP</code>
+                </div>
+                <div class="info-item">
+                    <strong>パスワード</strong>
+                    <code>dcon2026_kazuma</code>
+                </div>
+                <div class="info-item">
+                    <strong>IPアドレス</strong>
+                    <code>192.168.4.1</code>
+                </div>
+                <div class="info-item">
+                    <strong>ポート</strong>
+                    <code>80</code>
+                </div>
+                <div class="info-item">
+                    <strong>最大接続数</strong>
+                    4台
+                </div>
+            </div>
+
+            <div class="info-box">
+                <strong>ベースURL</strong><br>
+                <code>http://192.168.4.1</code>
+            </div>
+        </div>
+
+        <div class="content">
+            <h2>エンドポイント一覧</h2>
+
+            <!-- 1. ルートページ -->
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="endpoint-title">1. ルートページ</span>
+                    <span class="method">GET</span>
+                    <span class="endpoint-path">/</span>
+                </div>
+                <p>簡易的なWebページを表示します。</p>
+                <p><strong>レスポンス形式:</strong> <code>text/html</code></p>
+            </div>
+
+            <!-- 2. PWM制御API -->
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="endpoint-title">2. PWM制御API</span>
+                    <span class="method">GET</span>
+                    <span class="endpoint-path">/api/pwm</span>
+                </div>
+                <p>PWM出力値を設定します。</p>
+                
+                <h4>パラメータ</h4>
+                <ul class="param-list">
+                    <li><code>value</code> (必須): PWM値 (float)</li>
+                </ul>
+
+                <div class="example-section">
+                    <h4>リクエスト例</h4>
+                    <pre><code>GET /api/pwm?value=50.5</code></pre>
+
+                    <h4>レスポンス (application/json)</h4>
+                    <p><strong>成功時:</strong></p>
+                    <pre><code>{
+  "status": "ok",
+  "value": 50.5
+}</code></pre>
+
+                    <p><strong>エラー時:</strong></p>
+                    <pre><code>{
+  "status": "error",
+  "message": "value parameter required"
+}</code></pre>
+                </div>
+            </div>
+
+            <!-- 3. ステータス取得API -->
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="endpoint-title">3. ステータス取得API</span>
+                    <span class="method">GET</span>
+                    <span class="endpoint-path">/api/status</span>
+                </div>
+                <p>システムステータス情報を取得します。</p>
+                <p><strong>レスポンス形式:</strong> <code>application/json</code></p>
+
+                <div class="example-section">
+                    <h4>リクエスト例</h4>
+                    <pre><code>GET /api/status</code></pre>
+
+                    <h4>レスポンス例</h4>
+                    <pre><code>{
+  "connected_clients": 2,
+  "ip": "192.168.4.1",
+  "ssid": "ESP32-C3_AP"
+}</code></pre>
+
+                    <div class="field-desc">
+                        <h4>フィールド説明</h4>
+                        <ul>
+                            <li><strong>connected_clients</strong>: 現在接続しているクライアント数</li>
+                            <li><strong>ip</strong>: アクセスポイントのIPアドレス</li>
+                            <li><strong>ssid</strong>: アクセスポイントのSSID</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. 全センサーデータ取得API -->
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="endpoint-title">4. 全センサーデータ取得API</span>
+                    <span class="method">GET</span>
+                    <span class="endpoint-path">/api/sensors</span>
+                </div>
+                <p>すべてのセンサーデータを一括で取得します。</p>
+                <p><strong>レスポンス形式:</strong> <code>application/json</code></p>
+
+                <div class="example-section">
+                    <h4>リクエスト例</h4>
+                    <pre><code>GET /api/sensors</code></pre>
+
+                    <h4>レスポンス例</h4>
+                    <pre><code>{
+  "timestamp": 12345678,
+  "heart_rate": 72,
+  "spo2": 98,
+  "temperature": 36.5,
+  "Pitch": 10.25,
+  "Yaw": -5.30,
+  "Roll": 2.15
+}</code></pre>
+
+                    <div class="field-desc">
+                        <h4>フィールド説明</h4>
+                        <ul>
+                            <li><strong>timestamp</strong>: システム起動からの経過時間 (ミリ秒)</li>
+                            <li><strong>heart_rate</strong>: 心拍数 (bpm), 無効時は <code>-1</code></li>
+                            <li><strong>spo2</strong>: 血中酸素飽和度 (%), 無効時は <code>-1</code></li>
+                            <li><strong>temperature</strong>: 温度 (°C)</li>
+                            <li><strong>Pitch</strong>: ピッチ角 (度)</li>
+                            <li><strong>Yaw</strong>: ヨー角 (度)</li>
+                            <li><strong>Roll</strong>: ロール角 (度)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. 心拍数センサーデータAPI -->
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="endpoint-title">5. 心拍数センサーデータAPI</span>
+                    <span class="method">GET</span>
+                    <span class="endpoint-path">/api/sensor/heartrate</span>
+                </div>
+                <p>心拍数・SpO2センサー (MAX30105) のデータを取得します。</p>
+                <p><strong>レスポンス形式:</strong> <code>application/json</code></p>
+
+                <div class="example-section">
+                    <h4>リクエスト例</h4>
+                    <pre><code>GET /api/sensor/heartrate</code></pre>
+
+                    <h4>レスポンス例</h4>
+                    <pre><code>{
+  "sensor": "heartrate",
+  "hr_valid": true,
+  "spo2_valid": true,
+  "heart_rate": 72,
+  "spo2": 98,
+  "temperature": 36.5,
+  "ir_value": 50000,
+  "red_value": 45000
+}</code></pre>
+
+                    <div class="field-desc">
+                        <h4>フィールド説明</h4>
+                        <ul>
+                            <li><strong>sensor</strong>: センサー種別 (<code>"heartrate"</code>)</li>
+                            <li><strong>hr_valid</strong>: 心拍数データの有効性 (boolean)</li>
+                            <li><strong>spo2_valid</strong>: SpO2データの有効性 (boolean)</li>
+                            <li><strong>heart_rate</strong>: 心拍数 (bpm), 無効時は <code>-1</code></li>
+                            <li><strong>spo2</strong>: 血中酸素飽和度 (%), 無効時は <code>-1</code></li>
+                            <li><strong>temperature</strong>: 温度 (°C)</li>
+                            <li><strong>ir_value</strong>: 赤外線LED受光値</li>
+                            <li><strong>red_value</strong>: 赤色LED受光値</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 6. 加速度・姿勢センサーデータAPI -->
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="endpoint-title">6. 加速度・姿勢センサーデータAPI</span>
+                    <span class="method">GET</span>
+                    <span class="endpoint-path">/api/sensor/accel</span>
+                </div>
+                <p>加速度・姿勢センサー (BNO08x) のデータを取得します。</p>
+                <p><strong>レスポンス形式:</strong> <code>application/json</code></p>
+
+                <div class="example-section">
+                    <h4>リクエスト例</h4>
+                    <pre><code>GET /api/sensor/accel</code></pre>
+
+                    <h4>レスポンス例</h4>
+                    <pre><code>{
+  "sensor": "accelerometer",
+  "valid": true,
+  "Pitch": 10.254,
+  "Yaw": -5.301,
+  "Roll": 2.152,
+  "x_accel": 0.123,
+  "y_accel": -0.056,
+  "z_accel": 9.801
+}</code></pre>
+
+                    <div class="field-desc">
+                        <h4>フィールド説明</h4>
+                        <ul>
+                            <li><strong>sensor</strong>: センサー種別 (<code>"accelerometer"</code>)</li>
+                            <li><strong>valid</strong>: データの有効性 (boolean)</li>
+                            <li><strong>Pitch</strong>: ピッチ角 (度)</li>
+                            <li><strong>Yaw</strong>: ヨー角 (度)</li>
+                            <li><strong>Roll</strong>: ロール角 (度)</li>
+                            <li><strong>x_accel</strong>: X軸加速度 (m/s²)</li>
+                            <li><strong>y_accel</strong>: Y軸加速度 (m/s²)</li>
+                            <li><strong>z_accel</strong>: Z軸加速度 (m/s²)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 7. 404エラー -->
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="endpoint-title">7. 404エラー</span>
+                </div>
+                <p>存在しないエンドポイントへのアクセス時に返されます。</p>
+
+                <div class="example-section">
+                    <h4>レスポンス (application/json)</h4>
+                    <pre><code>{
+  "status": "error",
+  "message": "Not Found"
+}</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="content">
+            <h2>使用例</h2>
+
+            <h3>curlコマンドでのアクセス例</h3>
+            
+            <h4>ステータス確認</h4>
+            <pre><code>curl http://192.168.4.1/api/status</code></pre>
+
+            <h4>PWM制御</h4>
+            <pre><code>curl "http://192.168.4.1/api/pwm?value=75.0"</code></pre>
+
+            <h4>全センサーデータ取得</h4>
+            <pre><code>curl http://192.168.4.1/api/sensors</code></pre>
+
+            <h4>心拍数データ取得</h4>
+            <pre><code>curl http://192.168.4.1/api/sensor/heartrate</code></pre>
+
+            <h4>加速度データ取得</h4>
+            <pre><code>curl http://192.168.4.1/api/sensor/accel</code></pre>
+
+            <h3>JavaScriptでのアクセス例</h3>
+            <pre><code>// 全センサーデータを取得
+fetch('http://192.168.4.1/api/sensors')
+  .then(response => response.json())
+  .then(data => {
+    console.log('心拍数:', data.heart_rate);
+    console.log('SpO2:', data.spo2);
+    console.log('温度:', data.temperature);
+  });
+
+// PWM制御
+fetch('http://192.168.4.1/api/pwm?value=60')
+  .then(response => response.json())
+  .then(data => console.log('PWM設定完了:', data));</code></pre>
+        </div>
+
+        <div class="content">
+            <h2>エラーコード</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>HTTPステータス</th>
+                        <th>説明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>200</code></td>
+                        <td>成功</td>
+                    </tr>
+                    <tr>
+                        <td><code>400</code></td>
+                        <td>リクエストエラー (パラメータ不足など)</td>
+                    </tr>
+                    <tr>
+                        <td><code>404</code></td>
+                        <td>エンドポイントが見つからない</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="content">
+            <div class="note-box">
+                <h2>注意事項</h2>
+                <ol>
+                    <li><strong>センサー初期化</strong>: APIを使用する前に、センサーが正しく初期化されている必要があります</li>
+                    <li><strong>データ更新頻度</strong>: センサーデータは1秒ごとに更新されます</li>
+                    <li><strong>接続台数制限</strong>: 最大4台まで同時接続可能です</li>
+                    <li><strong>タイムアウト</strong>: I2C通信のタイムアウトは1000msに設定されています</li>
+                </ol>
+            </div>
+        </div>
+
+        <footer>
+            <p>ESP32-C3 Web API 仕様書</p>
+            <p>最終更新: 2025年12月21日</p>
+            <p>Claude AIによる自動生成</p>
+        </footer>
+    </div>
+</body>
+</html>

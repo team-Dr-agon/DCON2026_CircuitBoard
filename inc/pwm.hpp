@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 // PWM設定
-#define PWM_PIN 2          // PWMピン番号（回路図に合わせて変更してください）
+#define PWM_PIN 4          // PWMピン番号（XIAO ESP32-C3のD1 = GPIO3を試す）
 #define PWM_CHANNEL 0       // PWMチャンネル (0-15)
 #define PWM_FREQ 5000       // PWM周波数 (Hz)
 #define PWM_RESOLUTION 8    // PWM解像度 (8bit = 0-255)

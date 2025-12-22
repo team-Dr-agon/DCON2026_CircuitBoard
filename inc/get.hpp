@@ -7,6 +7,9 @@
 #include <heartRate.h>
 #include <spo2_algorithm.h>
 
+// IMUデータの有効性フラグ（外部からアクセス可能）
+extern bool imuDataValid;
+extern unsigned long lastIMUUpdate;
 
 // センサーデータ構造体
 struct HeartRateData {
@@ -34,10 +37,11 @@ bool initBNO08x(Adafruit_BNO08x_RVC &sensor, Stream *serial);
 
 // データ更新関数（loop()で常に呼び出す）
 void updateHeartRateBuffer(MAX30105 &sensor);
+void updateIMUBuffer(Adafruit_BNO08x_RVC &sensor, Stream *serial);
 
 // データ取得関数（現在の値を返す）
 void getHeartRateData(HeartRateData &data);
-bool getIMUData(Adafruit_BNO08x_RVC &sensor, IMUData &data);
+void getIMUData(IMUData &data);
 
 // ヘルパー関数
 void printHeartRateData(const HeartRateData &data);

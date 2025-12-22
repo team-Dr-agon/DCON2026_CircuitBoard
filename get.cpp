@@ -40,12 +40,46 @@ bool initMAX30105(MAX30105 &sensor) {
 bool initBNO08x(Adafruit_BNO08x_RVC &sensor, Stream *serial) {
     Serial.println("↓ BNO08xセンサーを初期化中...");
     
+    int retryCount = 0;
+    const int maxRetries = 5;
+    
     while (!sensor.begin(serial)) {
-        Serial.println("BNO08x not found. Retrying in 2 seconds...");
-        delay(2000);
+        Serial.print("BNO08x not found. Retry ");
+        Serial.print(++retryCount);
+        Serial.print("/");
+        Serial.println(maxRetries);
+        
+        if (retryCount >= maxRetries) {
+            Serial.println("ERROR: BNO08x initialization failed after max retries");
+            Serial.println("Check: 1) Wiring, 2) TX/RX pins, 3) Power supply");
+            return false;
+        }
+        
+        // シリアルバッファをクリア
+        while (serial->available()) {
+            serial->read();
+        }
+        
+        delay(1000);
     }
     
     Serial.println("BNO08x initialized successfully");
+    
+    // ウォームアップ: センサーが安定するまで待つ
+    Serial.println("BNO08x warming up...");
+    delay(200);  // センサーの安定化待ち
+    
+    // バッファに溜まった初期データのみクリア（待たずに読めるものだけ）
+    BNO08x_RVC_Data dummyData;
+    int discarded = 0;
+    while (sensor.read(&dummyData) && discarded < 20) {
+        discarded++;
+        // delay無し: バッファにあるものだけ読む
+    }
+    Serial.print("Discarded ");
+    Serial.print(discarded);
+    Serial.println(" initial packets");
+    
     return true;
 }
 
@@ -55,8 +89,11 @@ static uint32_t redBuffer[BUFFER_LENGTH];
 static int bufferIndex = 0;
 static bool bufferReady = false;
 
-// 最新のセンサーデータ（グローバル変数）
+// 最新のセンサーデータ(グローバル変数)
 static HeartRateData currentHeartRateData = {0};
+static IMUData currentIMUData = {0};
+bool imuDataValid = false;
+unsigned long lastIMUUpdate = 0;
 
 // センサーバッファを連続的に更新（loop()で常に呼び出す）
 void updateHeartRateBuffer(MAX30105 &sensor) {
@@ -117,22 +154,81 @@ void getHeartRateData(HeartRateData &data) {
     data = currentHeartRateData;
 }
 
-// IMUデータの取得
-bool getIMUData(Adafruit_BNO08x_RVC &sensor, IMUData &data) {
+// IMUバッファの更新（loop()で常に呼び出す）
+void updateIMUBuffer(Adafruit_BNO08x_RVC &sensor, Stream *serial) {
     BNO08x_RVC_Data rvcData;
     
-    if (!sensor.read(&rvcData)) {
-        return false;
+    // BNO085は100Hzでデータ出力（約10ms周期）
+    // UARTバッファに溜まったデータを全てクリアして、最新のみ使う
+    
+    bool dataReceived = false;
+    int readCount = 0;
+    
+    // バッファが空になるまで全て読む（最大100個まで安全装置）
+    while (sensor.read(&rvcData) && readCount < 100) {
+        currentIMUData.yaw = rvcData.yaw;
+        currentIMUData.pitch = rvcData.pitch;
+        currentIMUData.roll = rvcData.roll;
+        currentIMUData.x_accel = rvcData.x_accel;
+        currentIMUData.y_accel = rvcData.y_accel;
+        currentIMUData.z_accel = rvcData.z_accel;
+        dataReceived = true;
+        readCount++;
     }
     
-    data.yaw = rvcData.yaw;
-    data.pitch = rvcData.pitch;
-    data.roll = rvcData.roll;
-    data.x_accel = rvcData.x_accel;
-    data.y_accel = rvcData.y_accel;
-    data.z_accel = rvcData.z_accel;
+    // データが読めない状態が続き、バッファが溜まっている場合はリセット
+    static unsigned long lastClearTime = 0;
+    static int clearAttempts = 0;
     
-    return true;
+    if (!dataReceived && millis() - lastIMUUpdate > 500) {
+        // 1秒に1回だけクリア（連続クリアを防止）
+        if (millis() - lastClearTime > 1000) {
+            // UARTバッファの生データを直接クリア
+            int cleared = 0;
+            while (serial->available() && cleared < 512) {
+                serial->read();
+                cleared++;
+            }
+            
+            clearAttempts++;
+            Serial.print("[IMU] Buffer cleared (");
+            Serial.print(cleared);
+            Serial.print(" bytes) - attempt ");
+            Serial.println(clearAttempts);
+            
+            // 3回クリアしても改善しない場合はセンサー再初期化
+            if (clearAttempts >= 3) {
+                Serial.println("[IMU] Re-initializing sensor...");
+                delay(100);
+                if (sensor.begin(serial)) {
+                    Serial.println("[IMU] Re-initialization successful");
+                    clearAttempts = 0;
+                } else {
+                    Serial.println("[IMU] Re-initialization failed");
+                }
+            }
+            
+            lastClearTime = millis();
+        }
+    } else if (dataReceived) {
+        // データ取得成功時はカウンタリセット
+        clearAttempts = 0;
+    }
+    
+    if (dataReceived) {
+        imuDataValid = true;
+        lastIMUUpdate = millis();
+    }
+    
+    // 50ms以上更新がない場合は無効化（100Hzなので5パケット分）
+    if (millis() - lastIMUUpdate > 50) {
+        imuDataValid = false;
+    }
+}
+
+// 現在のIMUデータを取得（キャッシュから）
+void getIMUData(IMUData &data) {
+    data = currentIMUData;
 }
 
 // 心拍数データの表示

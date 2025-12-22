@@ -74,7 +74,7 @@ void handleSensorAPI() {
     
     // センサーデータ取得
     getHeartRateData(hrData);
-    bool imuSuccess = (pSensorBNO != nullptr) && getIMUData(*pSensorBNO, imuData);
+    getIMUData(imuData);
     
     // 心拍数
     int heartRate = hrData.hrValid ? hrData.heartRate : -1;
@@ -86,9 +86,9 @@ void handleSensorAPI() {
     float temperature = hrData.temperature;
     
     // 姿勢データ
-    float Pitch = imuSuccess ? imuData.pitch : 0.0;
-    float Yaw = imuSuccess ? imuData.yaw : 0.0;
-    float Roll = imuSuccess ? imuData.roll : 0.0;
+    float Pitch = imuData.pitch;
+    float Yaw = imuData.yaw;
+    float Roll = imuData.roll;
 
     // JSON形式で組み立て
     String json = "{";
@@ -96,6 +96,7 @@ void handleSensorAPI() {
     json += "\"heart_rate\":" + String(heartRate) + ",";
     json += "\"spo2\":" + String(spo2) + ",";
     json += "\"temperature\":" + String(temperature, 1) + ",";
+    json += "\"imu_valid\":" + String(imuDataValid ? "true" : "false") + ",";
     json += "\"Pitch\":" + String(Pitch, 2) + ",";
     json += "\"Yaw\":" + String(Yaw, 2) + ",";
     json += "\"Roll\":" + String(Roll, 2);
@@ -132,24 +133,17 @@ void handleHeartRateAPI() {
  */
 void handleAccelAPI() {
     IMUData data;
-    bool valid = (pSensorBNO != nullptr) && getIMUData(*pSensorBNO, data);
-    
-    float Pitch = valid ? data.pitch : 0.0;
-    float Yaw = valid ? data.yaw : 0.0;
-    float Roll = valid ? data.roll : 0.0;
-    float x_accel = valid ? data.x_accel : 0.0;
-    float y_accel = valid ? data.y_accel : 0.0;
-    float z_accel = valid ? data.z_accel : 0.0;
+    getIMUData(data);
     
     String json = "{";
     json += "\"sensor\":\"accelerometer\",";
-    json += "\"valid\":" + String(valid ? "true" : "false") + ",";
-    json += "\"Pitch\":" + String(Pitch, 3) + ",";
-    json += "\"Yaw\":" + String(Yaw, 3) + ",";
-    json += "\"Roll\":" + String(Roll, 3) + ",";
-    json += "\"x_accel\":" + String(x_accel, 3) + ",";
-    json += "\"y_accel\":" + String(y_accel, 3) + ",";
-    json += "\"z_accel\":" + String(z_accel, 3);
+    json += "\"valid\":" + String(imuDataValid ? "true" : "false") + ",";
+    json += "\"Pitch\":" + String(data.pitch, 3) + ",";
+    json += "\"Yaw\":" + String(data.yaw, 3) + ",";
+    json += "\"Roll\":" + String(data.roll, 3) + ",";
+    json += "\"x_accel\":" + String(data.x_accel, 3) + ",";
+    json += "\"y_accel\":" + String(data.y_accel, 3) + ",";
+    json += "\"z_accel\":" + String(data.z_accel, 3);
     json += "}";
     
     server.send(200, "application/json", json);

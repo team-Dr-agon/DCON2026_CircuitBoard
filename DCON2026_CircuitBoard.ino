@@ -25,9 +25,23 @@ Adafruit_BNO08x_RVC bno08x;
 #define BNO_TX 21
 #define BNO_RX 20
 
+// FreeRTOSタスクハンドル
+TaskHandle_t imuTaskHandle = NULL;
+
 // データ更新間隔（ミリ秒）
 #define SENSOR_UPDATE_INTERVAL 1000
 unsigned long lastSensorUpdate = 0;
+
+// HTTP処理を間引きするためのカウンタ
+unsigned int loopCounter = 0;
+
+// IMUデータ取得タスク（高優先度で実行）
+void imuUpdateTask(void* parameter) {
+    while (1) {
+        updateIMUBuffer(bno08x, &BNO_SERIAL);
+        vTaskDelay(1);  // 1ms待機（CPUを解放）
+    }
+}
 
 void setup() {
     // シリアルモニター初期化
@@ -42,27 +56,52 @@ void setup() {
     setPWM(20);
     Wire.begin();
     Wire.setTimeout(1000);
+    
+    // BNO08x UARTを先に初期化して十分な待機時間を確保
+    Serial.println("BNO08x Serial initializing...");
     BNO_SERIAL.begin(115200, SERIAL_8N1, BNO_RX, BNO_TX);
-    delay(100);
+    BNO_SERIAL.setRxBufferSize(512);  // RXバッファサイズを増やす
+    delay(500);  // 待機時間を増やす
+    
+    // バッファをクリア
+    while (BNO_SERIAL.available()) {
+        BNO_SERIAL.read();
+    }
     Serial.println("BNO08x Serial initialized");
+    
     initMAX30105(max30105);
     Serial.println("✓ MAX30105 ready");
     initBNO08x(bno08x, &BNO_SERIAL);
     Serial.println("✓ BNO08x ready");
+    
+    // IMUデータ取得用の専用タスクを起動（優先度高）
+    xTaskCreatePinnedToCore(
+        imuUpdateTask,      // タスク関数
+        "IMU_Task",          // タスク名
+        4096,               // スタックサイズ
+        NULL,               // パラメータ
+        2,                  // 優先度（高め）
+        &imuTaskHandle,     // タスクハンドル
+        0                   // Core 0で実行
+    );
+    Serial.println("✓ IMU task started");
+    
     initHTTPSensors(max30105, bno08x);
     setupHTTP();
     Serial.println("✓ HTTP server ready");
     
-    Serial.println("=== Setup Complete ===\n");
-    setPWM(0);
+    Serial.println("\n=== Setup Complete ===\n");
+    setPWM(0);  // 起動時はPWMを0%に設定    
 }
 
 void loop() {
-    // 心拍数センサーバッファを常に更新（平均値計算のため）
     updateHeartRateBuffer(max30105);
-    handleHTTP();
     
-    // センサー診断（1秒ごと）
+    // HTTP処理は10回に1回のみ実行（センサー更新を優先）
+    handleHTTP();
+
+    
+    // センサー診断
     if (millis() - lastSensorUpdate >= SENSOR_UPDATE_INTERVAL) {
         lastSensorUpdate = millis();
         
@@ -74,14 +113,24 @@ void loop() {
         
         // BNO08xデータ確認
         IMUData imuData;
-        if (getIMUData(bno08x, imuData)) {
-            Serial.print("[診断] IMU - Pitch: ");
+        getIMUData(imuData);
+        
+        // UARTバッファの状況を確認
+        int availableBytes = BNO_SERIAL.available();
+        Serial.print("[診断] UART Buffer: ");
+        Serial.print(availableBytes);
+        Serial.print(" bytes | ");
+        
+        if (imuDataValid) {
+            Serial.print("IMU - Pitch: ");
             Serial.print(imuData.pitch, 2);
             Serial.print("°, Yaw: ");
             Serial.print(imuData.yaw, 2);
-            Serial.println("°");
+            Serial.print("° (Age: ");
+            Serial.print(millis() - lastIMUUpdate);
+            Serial.println("ms)");
         } else {
-            Serial.println("[診断] IMU - データ読取失敗");
+            Serial.println("IMU - データ無効（1秒以上更新なし）");
         }
         Serial.println();
     }

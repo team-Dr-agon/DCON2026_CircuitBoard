@@ -1,5 +1,8 @@
 #include "inc/pwm.hpp"
 
+// 現在のPWM値を保持するグローバル変数
+static float currentPWM = 0.0;
+
 /**
  * @brief PWMの初期化
  * 
@@ -30,4 +33,16 @@ void setPWM(float percentage) {
     int dutyCycle = (int)((percentage / 100.0) * 255.0);    
     // PWM出力
     ledcWrite(PWM_PIN, dutyCycle);
+    
+    // 現在値を保存
+    currentPWM = percentage;
+}
+
+/**
+ * @brief PWM現在値取得
+ * 
+ * @return 現在のPWM値（0-100%）
+ */
+float getPWM() {
+    return currentPWM;
 }

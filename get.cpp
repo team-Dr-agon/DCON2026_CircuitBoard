@@ -23,8 +23,8 @@ bool initMAX30105(MAX30105 &sensor) {
     }
     
     // センサー設定
-    byte ledBrightness = 60;   // LED輝度 (0=Off to 255=50mA)
-    byte sampleAverage = 4;    // サンプル平均化
+    byte ledBrightness = 58;  // LED輝度 (0=Off to 255=50mA) - 検出向上のため増加
+    byte sampleAverage = 8;    // サンプル平均化
     byte ledMode = 2;          // 2 = Red + IR
     byte sampleRate = 100;     // サンプルレート (samples/sec)
     int pulseWidth = 411;      // パルス幅 (μs)
@@ -140,8 +140,20 @@ void updateHeartRateBuffer(MAX30105 &sensor) {
     currentHeartRateData.hrValid = (validHeartRate != 0);
     
     // 指が検出されているか確認（IR値が一定以上）
-    if (currentHeartRateData.irValue < 50000) {
+    // LED輝度100の場合、5000以上あれば検出と判断
+    if (currentHeartRateData.irValue < 5000) {
         currentHeartRateData.hrValid = false;
+        currentHeartRateData.spo2Valid = false;
+    }
+    
+    // 心拍数の妥当性チェック（40〜200 bpmの範囲外は無効化）
+    // 安静時は通常60〜100 bpm、運動時でも最大200 bpm程度
+    if (currentHeartRateData.heartRate < 40 || currentHeartRateData.heartRate > 200) {
+        currentHeartRateData.hrValid = false;
+    }
+    
+    // SpO2の妥当性チェック（70〜100%の範囲外は無効化）
+    if (currentHeartRateData.spo2 < 70 || currentHeartRateData.spo2 > 100) {
         currentHeartRateData.spo2Valid = false;
     }
     

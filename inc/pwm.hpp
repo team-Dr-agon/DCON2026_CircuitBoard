@@ -15,4 +15,7 @@ void setupPWM();
 // PWM制御関数（0-100%で指定）
 void setPWM(float percentage);
 
+// PWM現在値取得関数（0-100%）
+float getPWM();
+
 #endif // PWM_HPP

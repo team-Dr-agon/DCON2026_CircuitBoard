@@ -280,6 +280,249 @@ curl http://192.168.4.1/api/sensor/accel
 
 ---
 
+## システムフローチャート
+
+### メインシステムフロー
+
+```mermaid
+graph TD
+    Start["ESP32-C3 Start"] --> Setup["setup"]
+    Setup --> Init1["Serial,init"]
+    Setup --> Init2["I2C, init"]
+    Setup --> Init3["BNO085 UART-RVC init"]
+    Setup --> Init4["MAX30101 init"]
+    Setup --> Init5["Wi-Fi AP Start"]
+    Init1 --> Loop["loop"]
+    Init2 --> Loop
+    Init3 --> Loop
+    Init4 --> Loop
+    Init5 --> Loop
+    
+    Loop --> HR["心拍センサー更新<br/>MAX30101"]
+    Loop --> HTTP["HTTP処理<br/>handleHTTP()"]
+    Loop --> IMU["IMU更新Task<br/>BNO085"]
+    
+    HR --> HRBuf["バッファに保存<br/>アルゴリズム実行"]
+    IMU --> IMUProc["UART受信<br/>有効性チェック"]
+    HTTP --> APIReq["クライアント<br/>リクエスト処理"]
+    
+    HRBuf --> GData1["グローバル変数に保存"]
+    IMUProc --> GData1
+    APIReq --> APIResp["JSON応答<br/>返却"]
+    GData1 --> Loop
+```
+
+### API リクエスト処理フロー
+
+```mermaid
+graph LR
+    Client["クライアント<br/>リクエスト"] --> Method{HTTPメソッド<br/>＆パス}
+    
+    Method -->|"GET /"| Root["ルートページ<br/>HTMLを返却"]
+    Method -->|"GET /api/*"| API["API処理"]
+    Method -->|その他| Error["404エラー"]
+    
+    API --> APIV{パス判定}
+    APIV -->|"/api/pwm"| PWM["PWM制御API<br/>値を設定"]
+    APIV -->|"/api/status"| Status["ステータス取得API"]
+    APIV -->|"/api/sensors"| AllSensor["全センサーデータAPI"]
+    APIV -->|"/api/sensor/heartrate"| HR["心拍センサーAPI"]
+    APIV -->|"/api/sensor/accel"| Accel["IMUセンサーAPI"]
+    
+    Root --> Resp["レスポンス返却"]
+    PWM --> Resp
+    Status --> Resp
+    AllSensor --> Resp
+    HR --> Resp
+    Accel --> Resp
+    Error --> Resp
+```
+
+### センサーデータ取得フロー
+
+```mermaid
+graph TD
+    subgraph MAX["MAX30101"]
+        MAX1["loop"] --> MAX2["IR値, RED値"]
+        MAX2 --> MAX3["バッファに保存"]
+        MAX3 --> MAX4["アルゴリズム実行"]
+        MAX4 --> MAX5["心拍数・SpO2計算"]
+    end
+    
+    subgraph BNO["BNO085"]
+        BNO1["IMU_Task<br/>FreeRTOS"] --> BNO2["UART"]
+        BNO2 --> BNO3["check"]
+        BNO3 --> BNO4["Picth・Yaw・Roll"]
+        BNO4 --> BNO5["accel X,Y,Z"]
+    end
+    
+    MAX5 --> Store["Data Save"]
+    BNO5 --> Store
+    Store --> API["API呼び出し"]
+    API --> Response["JSON応答<br/>クライアントに返却"]
+```
+
+### PWM制御シーケンス
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server as ESP32-C3
+    participant PWM as PWM Driver
+    participant LED as LED
+    
+    Client->>Server: GET /api/pwm?value=50.5
+    Server->>Server: パラメータ解析
+    Server->>Server: 範囲チェック (0-100)
+    Server->>Server: 値を0-255に変換
+    Server->>PWM: ledcWrite(dutyCycle=128)
+    PWM->>LED: PWM信号出力
+    Server->>Client: {"status":"ok","value":50.5}
+```
+
+### FreeRTOSマルチタスク構成
+
+```mermaid
+graph TB
+    FreeRTOS["FreeRTOS"]
+    
+    FreeRTOS --> Core0["Core 0: メインタスク"]
+    FreeRTOS --> Core1["Core 1: 予約"]
+    
+    Core0 --> Loop["loop()処理<br/>優先度:1"]
+    Loop --> HR2["心拍センサー更新"]
+    Loop --> HTTP2["HTTP処理"]
+    Loop --> Diag["診断出力"]
+    
+    Core0 --> IMUTask["IMU_Task<br/>優先度:2<br/>BNO085常時更新"]
+```
+
+### 連携フロー
+```mermaid
+graph TB
+    subgraph HW["🔧 ハードウェア層（ESP32-C3）"]
+        Sensor1["MAX30101<br/>心拍センサー"]
+        Sensor2["BNO085<br/>IMUセンサー"]
+        UART["UART通信<br/>（BNO085）"]
+        I2C["I2C通信<br/>（MAX30101）"]
+        WiFi["Wi-Fi AP<br/>192.168.4.1"]
+        HTTPServer["HTTP Server<br/>/api/sensors<br/>/api/pwm"]
+        PWMOut["PWM出力<br/>LED制御"]
+        
+        Sensor1 --> I2C
+        Sensor2 --> UART
+        I2C --> DataBuf["センサーデータ<br/>バッファ"]
+        UART --> DataBuf
+        DataBuf --> HTTPServer
+        WiFi --> HTTPServer
+        HTTPServer --> PWMOut
+    end
+    
+    subgraph Frontend["💻 フロントエンド（クラ���アント）"]
+        Client["ESP32Client"]
+        Display["データ表示<br/>ログ出力"]
+        
+        Client -->|"GET /api/sensors"| HTTPReq["HTTP Request"]
+        HTTPResp["HTTP Response<br/>JSON"] --> Client
+        Client --> Display
+    end
+    
+    subgraph Backend["🧠 バックエンド（DLモデル・推論）"]
+        Preproc["SleepPreprocessor<br/>前処理<br/>（window=10s）"]
+        KF["KalmanHRフィルタ<br/>心拍数平滑化"]
+        DLModel["WakeDecisionModel<br/>DL推論"]
+        Policy["StableDecisionPolicy<br/>EMA安定化"]
+        Decision["起床判定<br/>0 or 1"]
+        
+        Preproc --> KF
+        KF --> DLModel
+        DLModel --> Policy
+        Policy --> Decision
+    end
+    
+    subgraph Control["⚙️ 制御ロジック"]
+        ForcedCheck{"強制起床<br/>time_to_end<br/>≤ margin? "}
+        HRCheck{"HR取得<br/>成功? "}
+        MotionCalc["モーション計算<br/>角度差分"]
+        PWMCalc["PWM値計算<br/>0. 0 or 20.0<br/>or 30.0"]
+    end
+    
+    %% データフロー
+    HTTPServer -->|"センサーデータ<br/>HR, Pitch, Yaw, Roll,<br/>value1, value2, SpO2"| HTTPResp
+    Client --> MotionCalc
+    MotionCalc --> Preproc
+    
+    Client --> ForcedCheck
+    ForcedCheck -->|"YES"| PWMCalc
+    ForcedCheck -->|"NO"| HRCheck
+    
+    HRCheck -->|"NO"| PWMCalc
+    HRCheck -->|"YES"| Preproc
+    
+    Decision --> PWMCalc
+    PWMCalc -->|"POST /api/pwm"| HTTPReq
+    HTTPReq --> HTTPServer
+    
+    %% 白黒スタイル
+    classDef hwStyle fill:#fff,stroke:#000,stroke-width:3px,color:#000
+    classDef feStyle fill:#fff,stroke:#000,stroke-width:2px,color:#000
+    classDef beStyle fill:#f0f0f0,stroke:#000,stroke-width:2px,color:#000
+    classDef ctrlStyle fill:#fff,stroke:#000,stroke-width:2px,color:#000,stroke-dasharray: 5 5
+    
+    class Sensor1,Sensor2,UART,I2C,WiFi,HTTPServer,PWMOut,DataBuf hwStyle
+    class Client,Display,HTTPReq,HTTPResp feStyle
+    class Preproc,KF,DLModel,Policy,Decision beStyle
+    class ForcedCheck,HRCheck,MotionCalc,PWMCalc ctrlStyle
+```
+### データフロー
+```mermaid
+
+sequenceDiagram
+    participant HW as 🔧 ESP32-C3<br/>（ハードウェア）
+    participant API as 📡 HTTP API
+    participant FE as 💻 クライアント<br/>（フロントエンド）
+    participant BE as 🧠 DLモデル<br/>（バックエンド）
+    participant Ctrl as ⚙️ 制御ロジック
+    
+    Note over HW:  センサーデータ取得
+    HW->>HW: MAX30101 → HR, SpO2
+    HW->>HW: BNO085 → Pitch, Yaw, Roll
+    
+    loop 1秒ごと
+        FE->>API: GET /api/sensors
+        API->>HW: データ要求
+        HW-->>API: JSON Response
+        API-->>FE: センサーデータ<br/>(HR, angles, etc)
+        
+        FE->>FE: モーション計算<br/>（角度差分）
+        FE->>Ctrl: 強制起床判定
+        
+        alt 強制起床モード
+            Ctrl-->>FE: PWM = 30.0
+        else 通常モード
+            alt HR取得失敗
+                Ctrl-->>FE: PWM = 0.0
+            else HR取得成功
+                FE->>BE: データ送信<br/>(HR, motion, etc)
+                BE->>BE: Kalmanフィルタ
+                BE->>BE: DL推論
+                BE->>BE: EMA安定化
+                BE-->>FE: 起床判定 (0 or 1)
+                FE->>Ctrl: 判定結果
+                Ctrl-->>FE: PWM = 0.0 or 20.0
+            end
+        end
+        
+        FE->>API: POST /api/pwm? value=X
+        API->>HW:  PWM設定
+        HW->>HW: LED出力
+        
+        Note over FE:  ログ出力・表示
+    end
+```
+---
+
 ## 更新履歴
 
 - 2025-12-21: 初版作成
+- 2026-01-10: Graphvizフローチャート追加

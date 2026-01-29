@@ -74,7 +74,6 @@ void setup() {
     initBNO08x(bno08x, &BNO_SERIAL);
     Serial.println("✓ BNO08x ready");
     
-    // IMUデータ取得用の専用タスクを起動（優先度高）
     xTaskCreatePinnedToCore(
         imuUpdateTask,      // タスク関数
         "IMU_Task",          // タスク名
